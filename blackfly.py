@@ -122,7 +122,7 @@ def get_resulting_frame_rate(cam):
         logging.warning("AcquisitionResultingFrameRate not available for this camera model.")
         return None
 
-def configure_blackfly(cam,exposure,gain):
+def configure_blackfly(cam,exposure,gain,width_to_set,height_to_set):
     nodemap = cam.GetNodeMap()
     set_hardware_sync_mode(cam,nodemap)
 
@@ -133,9 +133,18 @@ def configure_blackfly(cam,exposure,gain):
     cam.ExposureTime.SetValue(exposure)
     cam.GainAuto.SetValue(PySpin.GainAuto_Off)
     cam.Gain.SetValue(gain)
-    cam.PixelFormat.SetValue(PySpin.PixelFormat_BayerRG8)   
+    # cam.PixelFormat.SetValue(PySpin.PixelFormat_BayerRG8)   
+    cam.PixelFormat.SetValue(PySpin.PixelFormat_BayerRG16)
     processor = PySpin.ImageProcessor()
-    processor.SetColorProcessing(PySpin.SPINNAKER_COLOR_PROCESSING_ALGORITHM_HQ_LINEAR)
+    # processor.SetColorProcessing(PySpin.SPINNAKER_COLOR_PROCESSING_ALGORITHM_HQ_LINEAR)
+
+    # # Set width (adjust max value based on sensor)
+    # node_width = PySpin.CIntegerPtr(nodemap.GetNode("Width"))
+    # node_width.SetValue(width_to_set)
+
+    # # Set height
+    # node_height = PySpin.CIntegerPtr(nodemap.GetNode("Height"))
+    # node_height.SetValue(height_to_set)
 
     cam_transfer_layer_stream = cam.GetTLStreamNodeMap()
     buffer_count = PySpin.CIntegerPtr(cam_transfer_layer_stream.GetNode('StreamBufferCountManual'))

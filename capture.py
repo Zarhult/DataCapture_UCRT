@@ -165,6 +165,9 @@ def live_visualizer(blackfly_cam, boson_cam, args):
                 # Prepare display image
                 boson_height, boson_width = boson_img.shape[:2]
                 blackfly_height, blackfly_width = blackfly_img.shape[:2]
+                # If blackfly is unit16, convert to unit8
+                if blackfly_img.dtype == np.uint16:
+                    blackfly_img = (blackfly_img / 256).astype(np.uint8)
                 scale_factor = boson_height / blackfly_height
 
                 blackfly_img = cv2.pyrDown(blackfly_img,(int(blackfly_width//2),int(blackfly_height//2)))
@@ -214,7 +217,7 @@ def main():
     boson_cam = Boson()
     
     try:
-        configure_blackfly(blackfly_cam,args.exposure_time,args.gain)
+        configure_blackfly(blackfly_cam,args.exposure_time,args.gain,args.width,args.height)
         configure_boson(boson_cam)
         
         os.makedirs(args.base_dir, exist_ok=True)

@@ -4,7 +4,7 @@ parser = argparse.ArgumentParser(description="Synchronized RGB-Thermal Camera Sy
 
 parser.add_argument("--base_dir", 
                     type=str, 
-                    default=r"C:\Users\EndUser\Documents\Programming\BosonChecks\UCR_RGBT\dataset\1_20_25_calib_2",
+                    default=r"C:\Users\harshith\Documents\workspace\camera\DataCapture_UCRT\data\05_08_2025",
                     help="Base directory for saving synchronized image pairs")
 
 parser.add_argument("--fps", 
@@ -14,12 +14,12 @@ parser.add_argument("--fps",
 
 parser.add_argument("--exposure_time", 
                     type=float, 
-                    default=1000.0,
+                    default=500.0,
                     help="Exposure time in microseconds for Blackfly camera (default: 5000.0)")
 
 parser.add_argument("--gain", 
                     type=float, 
-                    default=15.0,
+                    default=10.0,
                     help="Gain value for Blackfly camera (default: 10.0)")
 
 parser.add_argument("--flip_boson", 
@@ -33,5 +33,15 @@ parser.add_argument("--delay",
 
 parser.add_argument("--frames",
                     type=int,
-                    default=20,
+                    default=100,
                     help='Recording duration in frames.')
+
+parser.add_argument("--width",
+                    type=int,
+                    default=1280,
+                    help='Width of the image to capture.')
+
+parser.add_argument("--height",
+                    type=int,
+                    default=960,
+                    help='Height of the image to capture.')
