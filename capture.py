@@ -24,6 +24,15 @@ HOMO = np.array([[ 9.05196993e-01, -3.26275658e-03, -3.43366182e+01],
                 [-2.74723623e-04,  9.01438758e-01,  3.03051600e+01],
                 [ 8.44170313e-07, -9.40938689e-06,  1.00000000e+00]])
 
+# raise keyboardinterrupt for int and term
+# lets the bash script coordinator easily interrupt this with Ctrl-C
+import signal
+def sigint_handler(signum, frame):
+    raise KeyboardInterrupt()
+
+signal.signal(signal.SIGINT, sigint_handler)
+signal.signal(signal.SIGTERM, sigint_handler)
+
 def calculate_fps(prev_time, curr_time, frame_count):
     time_elapsed = curr_time - prev_time
     fps = frame_count / time_elapsed
@@ -52,7 +61,7 @@ def capture_image_pair(blackfly_cam, boson_cam):
         print(f"Error: {e}")
         return None, None
 
-def save_recorded_frames(blackfly_frames, boson_frames, base_dir):
+def save_recorded_frames(blackfly_frames, boson_frames, timestamps, base_dir):
     # Determine the next available scene number
     scene_number = 1
     while os.path.exists(os.path.join(base_dir, f'scene_{scene_number}')):
@@ -70,14 +79,16 @@ def save_recorded_frames(blackfly_frames, boson_frames, base_dir):
         timestamp = datetime.now()
         
         # Save LWIR frame
-        lwir_filename = f"LWIR_RAW_{frame_number:06d}_{timestamp.strftime('%H_%M_%S_%f')[:-3]}"
+        #lwir_filename = f"LWIR_RAW_{frame_number:06d}_{timestamp.strftime('%H_%M_%S_%f')[:-3]}"
+        lwir_filename = f"LWIR_RAW_{frame_number:06d}_{timestamps[frame_number]}.png"
         frame = Image.fromarray(boson_frame)
         lwir_filename_path = os.path.join(lwir_path, lwir_filename)
         frame.save(f'{lwir_filename_path}.tiff')
         # cv2.imwrite(os.path.join(lwir_path, lwir_filename), boson_frame)
         
         # Save RGB frame
-        rgb_filename = f"RGB_RAW_{frame_number:06d}_{timestamp.strftime('%H_%M_%S_%f')[:-3]}.png"
+        #rgb_filename = f"RGB_RAW_{frame_number:06d}_{timestamp.strftime('%H_%M_%S_%f')[:-3]}.png"
+        rgb_filename = f"RGB_RAW_{frame_number:06d}_{timestamps[frame_number]}.png"
         cv2.imwrite(os.path.join(rgb_path, rgb_filename), blackfly_frame)
     
 def recorder(blackfly_cam, boson_cam, num_frames):
@@ -101,6 +112,60 @@ def recorder(blackfly_cam, boson_cam, num_frames):
         ctr+=1
 
     return captured_frames_blackfly, captured_frames_boson
+
+def indefinite_recorder(blackfly_cam, boson_cam):
+    '''Lightweight method to record frames'''
+    # Captured Frames
+    captured_frames_blackfly = []
+    captured_frames_boson = []
+    captured_frames_timestamps = []
+    # boson_cam.do_ffc()
+
+    with open('/tmp/capture_ready.txt', 'w') as f:
+        f.write('ready\n')
+    try:
+        while True:
+            blackfly_img, boson_img = capture_image_pair(blackfly_cam, boson_cam)
+
+            if blackfly_img is None or boson_img is None:
+                continue
+
+            # Handle recording
+            captured_frames_blackfly.append(blackfly_img)
+            captured_frames_boson.append(boson_img)
+            captured_frames_timestamps.append(time.time_ns())
+    except KeyboardInterrupt:
+        print('Recording interrupted')
+        os.remove('/tmp/capture_ready.txt')
+
+    return captured_frames_blackfly, captured_frames_boson, captured_frames_timestamps
+
+def make_indefinite_recording(args, recording, combined_img,blackfly_cam,boson_cam,base_dir):
+    time.sleep(args.delay)
+    # boson_cam.do_ffc()
+    # time.sleep(args.delay)
+
+    if not recording:
+        print("Starting recording")
+        recording=True
+        cv2.putText(combined_img, "Recording", (10, 60),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
+        captured_frames_blackfly, captured_frames_boson, captured_frames_timestamps = indefinite_recorder(blackfly_cam,boson_cam)
+
+        for i in range(len(captured_frames_blackfly)):
+            captured_frames_blackfly[i] = cv2.cvtColor(captured_frames_blackfly[i], cv2.COLOR_BayerRG2RGB)
+            print(captured_frames_blackfly[i].shape)
+            H,W = captured_frames_blackfly[i].shape[:2]
+            captured_frames_blackfly[i] = cv2.pyrDown(captured_frames_blackfly[i],(int(W//2),int(H//2)))
+
+        print("Recording complete")
+        recording = False
+        save_recorded_frames(captured_frames_blackfly, captured_frames_boson, captured_frames_timestamps, base_dir)  # You'll need to pass args to this function
+        print(f"Frames saved successfully: {base_dir}")
+        captured_frames_blackfly = []
+        captured_frames_boson = []
+
 
 def make_recording(args, recording, combined_img,blackfly_cam,boson_cam,num_frames,base_dir):
     time.sleep(args.delay)
@@ -201,6 +266,12 @@ def live_visualizer(blackfly_cam, boson_cam, args):
                 make_recording(args, recording, combined_img,blackfly_cam,boson_cam,num_frames,base_dir)
             elif key == ord('l'):
                 make_recording(args, recording, combined_img,blackfly_cam,boson_cam,num_frames,base_dir)
+            elif args.record:
+                if args.indefinite:
+                    make_indefinite_recording(args, recording, combined_img,blackfly_cam,boson_cam,base_dir)
+                else:
+                    make_recording(args, recording, combined_img,blackfly_cam,boson_cam,num_frames,base_dir)
+                break
 
     finally:
         blackfly_cam.EndAcquisition()
@@ -217,7 +288,7 @@ def main():
     boson_cam = Boson()
     
     try:
-        configure_blackfly(blackfly_cam,args.exposure_time,args.gain,args.width,args.height)
+        configure_blackfly(blackfly_cam,args.exposure_time,args.gain,args.width,args.height,args.fps)
         configure_boson(boson_cam)
         
         os.makedirs(args.base_dir, exist_ok=True)

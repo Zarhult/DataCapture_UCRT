@@ -45,3 +45,13 @@ parser.add_argument("--height",
                     type=int,
                     default=960,
                     help='Height of the image to capture.')
+
+parser.add_argument("--record",
+                    action='store_true',
+                    default=False,
+                    help='Whether or not to record data.')
+
+parser.add_argument("--indefinite",
+                    action="store_true",
+                    default=False,
+                    help='Whether to record until user interrupts.')

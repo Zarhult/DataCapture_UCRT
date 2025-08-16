@@ -122,13 +122,13 @@ def get_resulting_frame_rate(cam):
         logging.warning("AcquisitionResultingFrameRate not available for this camera model.")
         return None
 
-def configure_blackfly(cam,exposure,gain,width_to_set,height_to_set):
+def configure_blackfly(cam,exposure,gain,width_to_set,height_to_set,fps):
     nodemap = cam.GetNodeMap()
     set_hardware_sync_mode(cam,nodemap)
 
     # Set up other parameters
     cam.AcquisitionFrameRateEnable.SetValue(True)
-    cam.AcquisitionFrameRate.SetValue(60.0)
+    cam.AcquisitionFrameRate.SetValue(fps)
     cam.ExposureAuto.SetValue(PySpin.ExposureAuto_Off)
     cam.ExposureTime.SetValue(exposure)
     cam.GainAuto.SetValue(PySpin.GainAuto_Off)
