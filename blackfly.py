@@ -122,32 +122,63 @@ def get_resulting_frame_rate(cam):
         logging.warning("AcquisitionResultingFrameRate not available for this camera model.")
         return None
 
-def configure_blackfly(cam,exposure,gain,width_to_set,height_to_set,fps):
-    nodemap = cam.GetNodeMap()
-    set_hardware_sync_mode(cam,nodemap)
+#def configure_blackfly(cam,exposure,gain,width_to_set,height_to_set,fps):
+#    nodemap = cam.GetNodeMap()
+#    set_hardware_sync_mode(cam,nodemap)
+#
+#    # Set up other parameters
+#    cam.AcquisitionFrameRateEnable.SetValue(True)
+#    cam.AcquisitionFrameRate.SetValue(fps)
+#    cam.ExposureAuto.SetValue(PySpin.ExposureAuto_Off)
+#    cam.ExposureTime.SetValue(exposure)
+#    cam.GainAuto.SetValue(PySpin.GainAuto_Off)
+#    cam.Gain.SetValue(gain)
+#    # cam.PixelFormat.SetValue(PySpin.PixelFormat_BayerRG8)
+#    cam.PixelFormat.SetValue(PySpin.PixelFormat_BayerRG16)
+#    processor = PySpin.ImageProcessor()
+#    # processor.SetColorProcessing(PySpin.SPINNAKER_COLOR_PROCESSING_ALGORITHM_HQ_LINEAR)
+#
+#    # # Set width (adjust max value based on sensor)
+#    #node_width = PySpin.CIntegerPtr(nodemap.GetNode("Width"))
+#    #node_width.SetValue(width_to_set)
+#
+#    ## # Set height
+#    #node_height = PySpin.CIntegerPtr(nodemap.GetNode("Height"))
+#    #node_height.SetValue(height_to_set)
+#
+#    cam_transfer_layer_stream = cam.GetTLStreamNodeMap()
+#    buffer_count = PySpin.CIntegerPtr(cam_transfer_layer_stream.GetNode('StreamBufferCountManual'))
+#    buffer_count.SetValue(NUM_BUFFERS)
+#
+#    logging.info("BlackFly Max FPS:", get_resulting_frame_rate(cam))
 
-    # Set up other parameters
-    cam.AcquisitionFrameRateEnable.SetValue(True)
-    cam.AcquisitionFrameRate.SetValue(fps)
+def configure_blackfly(cam, exposure, gain, width_to_set, height_to_set, fps_unused):
+    nodemap = cam.GetNodeMap()
+
+    # Set trigger source to line3 for hardware sync
+    cam.TriggerMode.SetValue(PySpin.TriggerMode_Off)
+    # Make sure line3 is an input line first
+    cam.LineSelector.SetValue(PySpin.LineSelector_Line3)
+    cam.LineMode.SetValue(PySpin.LineMode_Input)
+    cam.TriggerSelector.SetValue(PySpin.TriggerSelector_FrameStart)
+    cam.TriggerSource.SetValue(PySpin.TriggerSource_Line3)
+    cam.TriggerActivation.SetValue(PySpin.TriggerActivation_RisingEdge)
+
+    # Free framerate
+    cam.AcquisitionMode.SetValue(PySpin.AcquisitionMode_Continuous)
+    if cam.AcquisitionFrameRateEnable.GetAccessMode() == PySpin.RW:
+        cam.AcquisitionFrameRateEnable.SetValue(False)
+    cam.TriggerMode.SetValue(PySpin.TriggerMode_On)
+
+    # Set exposure, gain
     cam.ExposureAuto.SetValue(PySpin.ExposureAuto_Off)
-    cam.ExposureTime.SetValue(exposure)
+    cam.ExposureTime.SetValue(exposure) # in µs
     cam.GainAuto.SetValue(PySpin.GainAuto_Off)
     cam.Gain.SetValue(gain)
-    # cam.PixelFormat.SetValue(PySpin.PixelFormat_BayerRG8)   
-    cam.PixelFormat.SetValue(PySpin.PixelFormat_BayerRG16)
-    processor = PySpin.ImageProcessor()
-    # processor.SetColorProcessing(PySpin.SPINNAKER_COLOR_PROCESSING_ALGORITHM_HQ_LINEAR)
-
-    # # Set width (adjust max value based on sensor)
-    # node_width = PySpin.CIntegerPtr(nodemap.GetNode("Width"))
-    # node_width.SetValue(width_to_set)
-
-    # # Set height
-    # node_height = PySpin.CIntegerPtr(nodemap.GetNode("Height"))
-    # node_height.SetValue(height_to_set)
+    # 8 bit format for low latency
+    cam.PixelFormat.SetValue(PySpin.PixelFormat_BayerRG8)
 
     cam_transfer_layer_stream = cam.GetTLStreamNodeMap()
     buffer_count = PySpin.CIntegerPtr(cam_transfer_layer_stream.GetNode('StreamBufferCountManual'))
     buffer_count.SetValue(NUM_BUFFERS)
 
-    logging.info("BlackFly Max FPS:", get_resulting_frame_rate(cam))

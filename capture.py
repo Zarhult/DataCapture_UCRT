@@ -38,8 +38,21 @@ def calculate_fps(prev_time, curr_time, frame_count):
     fps = frame_count / time_elapsed
     return fps, curr_time
 
+def drain_blackfly(cam):
+    while True:
+        try:
+            img = cam.GetNextImage(0)  # non-blocking; may raise timeout immediately
+            if img.IsIncomplete():
+                img.Release()
+                continue
+            img.Release()
+        except PySpin.SpinnakerException:
+            break  # nothing queued
+
 def capture_image_pair(blackfly_cam, boson_cam):
     try:
+        # Drain blackfly, otherwise it lags behind boson
+        drain_blackfly(blackfly_cam)
 
         # Capture from Boson
         boson_image = boson_cam.grab()
@@ -50,7 +63,7 @@ def capture_image_pair(blackfly_cam, boson_cam):
             print("Blackfly image incomplete. Skipping.")
             blackfly_image.Release()
             return None, None
-        
+
         # Convert Blackfly image to numpy array
         blackfly_array = blackfly_image.GetNDArray()
         blackfly_image.Release()
@@ -61,7 +74,7 @@ def capture_image_pair(blackfly_cam, boson_cam):
         print(f"Error: {e}")
         return None, None
 
-def save_recorded_frames(blackfly_frames, boson_frames, timestamps, base_dir):
+def save_recorded_frames(args, blackfly_frames, boson_frames, timestamps, base_dir):
     # Determine the next available scene number
     scene_number = 1
     while os.path.exists(os.path.join(base_dir, f'scene_{scene_number}')):
@@ -80,7 +93,7 @@ def save_recorded_frames(blackfly_frames, boson_frames, timestamps, base_dir):
         
         # Save LWIR frame
         #lwir_filename = f"LWIR_RAW_{frame_number:06d}_{timestamp.strftime('%H_%M_%S_%f')[:-3]}"
-        lwir_filename = f"LWIR_RAW_{frame_number:06d}_{timestamps[frame_number]}.png"
+        lwir_filename = f"LWIR_RAW_{frame_number:06d}_{timestamps[frame_number]}"
         frame = Image.fromarray(boson_frame)
         lwir_filename_path = os.path.join(lwir_path, lwir_filename)
         frame.save(f'{lwir_filename_path}.tiff')
@@ -138,6 +151,10 @@ def indefinite_recorder(blackfly_cam, boson_cam):
         print('Recording interrupted')
         os.remove('/tmp/capture_ready.txt')
 
+    # Ugly way of fixing the temporal misalignment between the cameras by shifting frames
+    num_frame_shift = 3
+    captured_frames_boson = [captured_frames_boson[0]] * num_frame_shift + captured_frames_boson
+    captured_frames_boson = captured_frames_boson[:-num_frame_shift]
     return captured_frames_blackfly, captured_frames_boson, captured_frames_timestamps
 
 def make_indefinite_recording(args, recording, combined_img,blackfly_cam,boson_cam,base_dir):
@@ -153,6 +170,10 @@ def make_indefinite_recording(args, recording, combined_img,blackfly_cam,boson_c
 
         captured_frames_blackfly, captured_frames_boson, captured_frames_timestamps = indefinite_recorder(blackfly_cam,boson_cam)
 
+        for i in range(len(captured_frames_boson)):
+            if args.flip_boson:
+                captured_frames_boson[i] = cv2.flip(captured_frames_boson[i], 1)
+
         for i in range(len(captured_frames_blackfly)):
             captured_frames_blackfly[i] = cv2.cvtColor(captured_frames_blackfly[i], cv2.COLOR_BayerRG2RGB)
             print(captured_frames_blackfly[i].shape)
@@ -161,7 +182,7 @@ def make_indefinite_recording(args, recording, combined_img,blackfly_cam,boson_c
 
         print("Recording complete")
         recording = False
-        save_recorded_frames(captured_frames_blackfly, captured_frames_boson, captured_frames_timestamps, base_dir)  # You'll need to pass args to this function
+        save_recorded_frames(args, captured_frames_blackfly, captured_frames_boson, captured_frames_timestamps, base_dir)  # You'll need to pass args to this function
         print(f"Frames saved successfully: {base_dir}")
         captured_frames_blackfly = []
         captured_frames_boson = []
@@ -247,9 +268,9 @@ def live_visualizer(blackfly_cam, boson_cam, args):
                 boson_colormap = cv2.applyColorMap(boson_normalized, cv2.COLORMAP_INFERNO)
 
                 height, width = boson_colormap.shape[:2]
-                warped = cv2.warpPerspective(blackfly_img, HOMO, (width,height))
-                warped = np.repeat(warped[:, :, np.newaxis], 3, axis=2)
-                overlay = cv2.addWeighted(warped, 0.5 , boson_colormap, 1-0.5, 0) 
+                #warped = cv2.warpPerspective(blackfly_img, HOMO, (width,height))
+                #warped = np.repeat(warped[:, :, np.newaxis], 3, axis=2)
+                overlay = cv2.addWeighted(blackfly_resized, 0.5 , boson_colormap, 1-0.5, 0)
                 combined_img = np.hstack((blackfly_resized, boson_colormap, overlay))
 
                 # Add FPS text
